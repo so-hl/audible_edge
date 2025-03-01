@@ -4,28 +4,155 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ToneTrader - Settings</title>
+  
   <link rel="stylesheet" href="styles.css">
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #1e1e1e, #121212);
+      color: #ffffff;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      padding: 25px;
+      background: rgba(30, 30, 30, 0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+    }
+    h1 {
+      color: #f0b90b;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    input[type="range"] {
+      width: 100%;
+      margin: 10px 0;
+      cursor: pointer;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    .value-display {
+      font-size: 1.2rem;
+      color: #f0b90b;
+      font-weight: 600;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 1.2rem;
+      background: rgba(34, 34, 34, 0.9);
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(255, 255, 255, 0.05);
+    }
+    nav {
+      margin-top: 20px;
+    }
+    nav a {
+      color: #f0b90b;
+      text-decoration: none;
+      font-weight: 500;
+      margin: 0 12px;
+      transition: all 0.3s ease-in-out;
+    }
+    nav a:hover {
+      text-decoration: underline;
+      color: #ffd700;
+    }
+  </style>
 </head>
 <body>
-  <div role="main" aria-label="ToneTrader Settings Interface">
-    <h1 style="visibility: hidden;">ToneTrader Settings</h1>
-    <header>
-      <h2>ToneTrader</h2>
-    </header>
+  <div class="container" role="main" aria-label="ToneTrader Settings Interface">
+    <h1>ToneTrader Settings</h1>
+    
+    <div class="settings">
+      <label for="frequency">Frequency (Hz): <span id="freqValue" class="value-display">261.63</span></label>
+      <input type="range" id="frequency" min="100" max="1000" value="261.63">
+
+      <label for="amplitude">Amplitude: <span id="ampValue" class="value-display">0.5</span></label>
+      <input type="range" id="amplitude" min="0" max="1" step="0.1" value="0.5">
+
+      <label for="harmonics">Harmonics: <span id="harmValue" class="value-display">1</span></label>
+      <input type="range" id="harmonics" min="1" max="5" value="1">
+    </div>
+    
+    <div id="status" aria-live="polite">Adjust the settings above.</div>
+    
     <nav>
       <a href="index.html">Back</a> | <a href="home.html">Home</a>
     </nav>
-    <div class="settings">
-      <label for="frequency">Frequency (Hz): <span id="freqValue">261.63</span></label>
-      <input type="range" id="frequency" min="100" max="1000" value="261.63">
-      <label for="amplitude">Amplitude: <span id="ampValue">0.5</span></label>
-      <input type="range" id="amplitude" min="0" max="1" step="0.1" value="0.5">
-      <label for="harmonics">Harmonics: <span id="harmValue">1</span></label>
-      <input type="range" id="harmonics" min="1" max="5" value="1">
-    </div>
-    <div id="status" aria-live="polite"></div>
   </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-  <script src="script.js"></script>
+  
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const frequencySlider = document.getElementById("frequency");
+      const amplitudeSlider = document.getElementById("amplitude");
+      const harmonicsSlider = document.getElementById("harmonics");
+
+      const freqValue = document.getElementById("freqValue");
+      const ampValue = document.getElementById("ampValue");
+      const harmValue = document.getElementById("harmValue");
+
+      let debounceTimer;
+      let voices = [];
+
+      function loadVoices() {
+        voices = speechSynthesis.getVoices();
+      }
+
+      function speak(text) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1; // Normal speed
+        utterance.pitch = 1; // Normal pitch
+        
+        // Find a female voice
+        const femaleVoice = voices.find(voice => 
+          voice.name.includes("Female") || voice.name.includes("Samantha") || voice.name.includes("Google UK English Female")
+        );
+
+        if (femaleVoice) {
+          utterance.voice = femaleVoice;
+        }
+
+        speechSynthesis.speak(utterance);
+      }
+
+      function updateValueAndSpeak(slider, valueSpan, label) {
+        clearTimeout(debounceTimer);
+        valueSpan.textContent = slider.value;
+
+        debounceTimer = setTimeout(() => {
+          speak(`${label} ${slider.value}`);
+        }, 800); // Speak only after the user stops moving the slider
+      }
+
+      frequencySlider.addEventListener("input", () => {
+        updateValueAndSpeak(frequencySlider, freqValue, "Frequency set to");
+      });
+
+      amplitudeSlider.addEventListener("input", () => {
+        updateValueAndSpeak(amplitudeSlider, ampValue, "Amplitude set to");
+      });
+
+      harmonicsSlider.addEventListener("input", () => {
+        updateValueAndSpeak(harmonicsSlider, harmValue, "Harmonics set to");
+      });
+
+      // Load voices on page load
+      speechSynthesis.onvoiceschanged = loadVoices;
+      loadVoices();
+    });
+  </script>
 </body>
 </html>
