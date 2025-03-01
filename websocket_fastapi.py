@@ -5,7 +5,15 @@ import websockets
 
 app = FastAPI()
 
-BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/ethusdt@trade"
+# Default values (to be updated dynamically)
+SYMBOL = "ethusdt"
+BINANCE_WS_URL = f"wss://stream.binance.com:9443/ws/{SYMBOL}@trade"
+
+def update_symbol(new_symbol):
+    global SYMBOL, BINANCE_WS_URL
+    SYMBOL = new_symbol.lower()
+    BINANCE_WS_URL = f"wss://stream.binance.com:9443/ws/{SYMBOL}@trade"
+    print(f"🔧 Updated WebSocket URL: {BINANCE_WS_URL}")
 
 async def binance_ws(websocket: WebSocket):
     async with websockets.connect(BINANCE_WS_URL) as binance_ws:
@@ -14,6 +22,12 @@ async def binance_ws(websocket: WebSocket):
             data = await binance_ws.recv()
             await websocket.send_text(data)
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+@app.websocket("/ws/{symbol}")
+async def websocket_endpoint(websocket: WebSocket, symbol: str):
+    update_symbol(symbol)
     await binance_ws(websocket)
+
+@app.post("/update_symbol")
+async def update_symbol_endpoint(symbol: str):
+    update_symbol(symbol)
+    return {"message": "Symbol updated successfully", "new_symbol": SYMBOL}
