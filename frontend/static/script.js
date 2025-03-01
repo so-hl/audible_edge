@@ -1,28 +1,57 @@
-const priceWs = new WebSocket("ws://127.0.0.1:8000/ws/ethusdt");
-const voiceTraderAPI = "http://127.0.0.1:5001/trade";  // Voice trader API endpoint
+document.addEventListener("DOMContentLoaded", () => {
+    const socket = io.connect("http://127.0.0.1:5000");
 
-// Price WebSocket Event Listener
-priceWs.onmessage = function (event) {
-    const data = JSON.parse(event.data);
-    const price = parseFloat(data.p);
-    console.log(`Price: ${price}`);
+    const tradingPairInput = document.getElementById("tradingPair");
+    const thresholdInput = document.getElementById("threshold");
+    const timeWindowInput = document.getElementById("timeWindow");
+    const connectBtn = document.getElementById("connectBtn");
+    const updateBtn = document.getElementById("updateBtn");
+    const latestTradeDiv = document.getElementById("latestTrade");
 
-    if (price > lastPrice * 1.02) {
-        playTone(880);  // High pitch for increase
-    } else if (price < lastPrice * 0.98) {
-        playTone(440);  // Low pitch for decrease
-    }
+    // Handle WebSocket Events from Flask-SocketIO
+    socket.on("price_alert", (data) => {
+        latestTradeDiv.innerHTML = `🚨 Price Change Alert: ${data.price_change.toFixed(2)}%`;
+        latestTradeDiv.style.color = data.price_change > 0 ? "green" : "red";
+    });
 
-    lastPrice = price;
-};
+    // Connect to WebSocket
+    connectBtn.addEventListener("click", () => {
+        const symbol = tradingPairInput.value.toLowerCase();
+        if (!symbol) {
+            alert("Please enter a trading pair (e.g., BTCUSDT)");
+            return;
+        }
+        fetch("/update_settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ symbol })
+        }).then((response) => response.json())
+          .then((data) => {
+              console.log("Updated Symbol:", data.symbol);
+              alert(`Switched to tracking ${data.symbol.toUpperCase()}`);
+          })
+          .catch((error) => console.error("Error updating symbol:", error));
+    });
 
-// Voice Trading (Send Trade via Voice Command)
-function sendTrade(order) {
-    fetch(voiceTraderAPI, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: order })
-    }).then(response => response.json())
-      .then(data => console.log("Trade Executed:", data))
-      .catch(err => console.error("Error:", err));
-}
+    // Update Settings
+    updateBtn.addEventListener("click", () => {
+        const threshold = parseFloat(thresholdInput.value);
+        const timeWindow = parseInt(timeWindowInput.value, 10);
+
+        if (isNaN(threshold) || isNaN(timeWindow)) {
+            alert("Please enter valid threshold and time window values.");
+            return;
+        }
+
+        fetch("/update_settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ threshold, time_window: timeWindow })
+        }).then((response) => response.json())
+          .then((data) => {
+              console.log("Updated Settings:", data);
+              alert(`Updated Threshold: ${data.threshold}%, Time Window: ${data.time_window}s`);
+          })
+          .catch((error) => console.error("Error updating settings:", error));
+    });
+});
