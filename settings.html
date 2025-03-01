@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ToneTrader - Settings</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div role="main" aria-label="ToneTrader Settings Interface">
+    <h1 style="visibility: hidden;">ToneTrader Settings</h1>
+    <header>
+      <h2>ToneTrader</h2>
+    </header>
+    <nav>
+      <a href="index.html">Back</a> | <a href="home.html">Home</a>
+    </nav>
+    <div class="settings">
+      <label for="frequency">Frequency (Hz): <span id="freqValue">261.63</span></label>
+      <input type="range" id="frequency" min="100" max="1000" value="261.63">
+      <label for="amplitude">Amplitude: <span id="ampValue">0.5</span></label>
+      <input type="range" id="amplitude" min="0" max="1" step="0.1" value="0.5">
+      <label for="harmonics">Harmonics: <span id="harmValue">1</span></label>
+      <input type="range" id="harmonics" min="1" max="5" value="1">
+    </div>
+    <div id="status" aria-live="polite"></div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
