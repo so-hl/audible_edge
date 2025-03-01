@@ -6,7 +6,7 @@ import requests
 from flask import Flask, render_template
 import threading
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="../frontend/templates", static_folder="../frontend/static")
 
 # FastAPI Server URL (Change to match your host if running separately)
 FASTAPI_WS_URL = "ws://127.0.0.1:8000/ws/"
@@ -71,7 +71,7 @@ threading.Thread(target=connect_to_fastapi_ws, daemon=True).start()
 
 @app.route("/", methods=["GET"])
 def index():
-    return render_template("index.html", symbol=SYMBOL, threshold=THRESHOLD, time_window=TIME_WINDOW)
+    return render_template("index.html")
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
