@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Binance WebSocket Tracker</title>
-  <link rel="stylesheet" href="styles.css">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -88,6 +90,6 @@
     </nav>
   </div>
 
-  <script src="script.js"></script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
