@@ -1,22 +1,15 @@
 from fastapi import FastAPI, WebSocket
-import asyncio
 import json
 import websockets
 
 app = FastAPI()
 
-# Default values (to be updated dynamically)
+# Default values
 SYMBOL = "ethusdt"
-BINANCE_WS_URL = f"wss://stream.binance.com:9443/ws/{SYMBOL}@trade"
+BINANCE_WS_URL = lambda symbol: f"wss://stream.binance.com:9443/ws/{symbol}@trade"
 
-def update_symbol(new_symbol):
-    global SYMBOL, BINANCE_WS_URL
-    SYMBOL = new_symbol.lower()
-    BINANCE_WS_URL = f"wss://stream.binance.com:9443/ws/{SYMBOL}@trade"
-    print(f"🔧 Updated WebSocket URL: {BINANCE_WS_URL}")
-
-async def binance_ws(websocket: WebSocket):
-    async with websockets.connect(BINANCE_WS_URL) as binance_ws:
+async def binance_ws(websocket: WebSocket, symbol: str):
+    async with websockets.connect(BINANCE_WS_URL(symbol)) as binance_ws:
         await websocket.accept()
         while True:
             data = await binance_ws.recv()
@@ -24,10 +17,10 @@ async def binance_ws(websocket: WebSocket):
 
 @app.websocket("/ws/{symbol}")
 async def websocket_endpoint(websocket: WebSocket, symbol: str):
-    update_symbol(symbol)
-    await binance_ws(websocket)
+    await binance_ws(websocket, symbol)
 
 @app.post("/update_symbol")
 async def update_symbol_endpoint(symbol: str):
-    update_symbol(symbol)
+    global SYMBOL
+    SYMBOL = symbol.lower()
     return {"message": "Symbol updated successfully", "new_symbol": SYMBOL}
