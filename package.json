@@ -1,0 +1,25 @@
+{
+  "name": "tonetrader",
+  "version": "1.0.0",
+  "description": "revolutionising the trading experience for visually impaired traders",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/so-hl/tonetrader.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/so-hl/tonetrader/issues"
+  },
+  "homepage": "https://github.com/so-hl/tonetrader#readme",
+  "dependencies": {
+    "@google-cloud/speech": "^6.7.1",
+    "dotenv": "^16.4.7",
+    "node-record-lpcm16": "^1.0.1"
+  }
+}
