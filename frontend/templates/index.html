@@ -2,88 +2,86 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ToneTrader</title>
-    <link rel="stylesheet" href="/static/styles.css"> <!-- Adjusted for live-server port 5500 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 400px;
+            margin: auto;
+            padding: 20px;
+            background: #1e1e1e;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        .title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #facc15;
+        }
+        .input-box {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            background: #2c2c2c;
+            border: none;
+            color: white;
+            text-align: center;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 8px;
+            background: #facc15;
+            font-weight: bold;
+            color: black;
+            cursor: pointer;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 1rem;
+            color: #bbb;
+        }
+    </style>
 </head>
 <body>
-    <div container role="main" aria-label="ToneTrader">
-        <h1>ToneTrader</h1>
-        <input type="text" id="tradingPair" placeholder="Trading Pair, e.g., ETHBTC">
-        <button id="connectBtn">Connect</button>
-        <div id="latestTrade"></div>
-        <div id="confirmationDiv"></div>
-        <div id="tradeExecution"></div> <!-- For trade confirmation feedback -->
-        <div id="priceChange"></div> <!-- Added for price change display -->
+    <div class="container">
+        <h1 class="title">ToneTrader</h1>
+        <input type="text" id="tradingPair" class="input-box" placeholder="Ticker, e.g., BTCUSDT">
+        <button id="connectBtn" class="btn">Connect</button>
         
-        <label for="thresholdSlider">Price Change Threshold: <span id="thresholdValue">0.001</span>%</label>
-        <input type="range" id="thresholdSlider" min="0.001" max="1" step="0.001" value="0.001">
+        <div class="status" id="connectionStatus">Not connected</div>
+        
+        <p class="mt-4">Threshold (%):</p>
+        <input type="text" id="threshold" class="input-box" placeholder="e.g., 0.02">
+        
+        <p class="mt-4">Time Window (sec):</p>
+        <input type="text" id="timeWindow" class="input-box" placeholder="e.g., 30">
+        
+        <button id="updateSettingsBtn" class="btn">Update Settings</button>
     </div>
-    <script src="/static/script.js"></script> <!-- Adjusted for live-server port 5500 -->
+    
+    <div class="container mt-6">
+        <h2 class="title">🎤 Voice Trade Execution</h2>
+        <button id="startVoiceBtn" class="btn">🎤 Start Voice Trading</button>
+        <button id="stopVoiceBtn" class="btn bg-red-500 text-white">⛔ Stop Voice Trading</button>
+        <p class="status">Voice trading is OFF</p>
+        <p class="status">Waiting for command...</p>
+    </div>
+
     <script>
-        let tradeExecution = document.getElementById('tradeExecution');
-        let latestTrade = document.getElementById('latestTrade');
-        let confirmationDiv = document.getElementById('confirmationDiv');
-        let priceChangeElement = document.getElementById('priceChange'); 
-        let thresholdSlider = document.getElementById('thresholdSlider');
-        let thresholdValue = document.getElementById('thresholdValue');
-        
-        let previousPrice = null;
-        let threshold = parseFloat(thresholdSlider.value);
-
-        // Update threshold when slider is moved
-        thresholdSlider.addEventListener('input', function() {
-            threshold = parseFloat(this.value);
-            thresholdValue.innerText = this.value;
-        });
-
-        function fetchTradeData(symbol) {
-            fetch(`http://127.0.0.1:8000/trade/${symbol}`)
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.json();
-                })
-                .then(data => {
-                    const price = parseFloat(data.p);
-                    const time = new Date(data.T * 1000).toLocaleTimeString(); // Convert to ms
-                    
-                    let priceChange = 0;
-                    let priceChangePercentage = 0;
-
-                    if (previousPrice !== null) {
-                        priceChange = price - previousPrice;
-                        priceChangePercentage = ((priceChange / previousPrice) * 100).toFixed(3);
-                    }
-                    
-                    previousPrice = price;
-
-                    latestTrade.innerText = `Latest Trade: ${price} USD at ${time}`;
-                    
-                    if (previousPrice !== null) {
-                        if (Math.abs(priceChangePercentage) > threshold) {
-                            const audio = new Audio('/static/beep.wav');
-                            audio.play();
-                        }
-                        priceChangeElement.innerText = `Price Change: ${priceChangePercentage}%`;
-                    }
-                })
-                .catch(error => console.error('Error fetching trade data:', error));
-        }
-
         document.getElementById('connectBtn').addEventListener('click', () => {
-            const tradingPairInput = document.getElementById('tradingPair');
-            if (!tradingPairInput) {
-                console.error('tradingPairInput element not found!');
-                return;
-            }
-            const symbol = tradingPairInput.value.toLowerCase() || 'ethbtc';
-            if (!symbol) {
-                confirmationDiv.textContent = 'Please enter a trading pair!';
-                return;
-            }
-            confirmationDiv.textContent = `Connecting to ${symbol.toUpperCase()}...`;
-            setTimeout(() => confirmationDiv.textContent = '', 2000);
-            fetchTradeData(symbol); // Initial fetch
-            setInterval(() => fetchTradeData(symbol), 5000); // Poll every 5 seconds
+            const symbol = document.getElementById('tradingPair').value || 'BTCUSDT';
+            document.getElementById('connectionStatus').innerText = `Connecting to ${symbol.toUpperCase()}...`;
+            setTimeout(() => document.getElementById('connectionStatus').innerText = 'Connected', 2000);
         });
     </script>
 </body>
