@@ -82,11 +82,11 @@
   </style>
 </head>
 <body>
-  <div class="container" role="main" aria-label="Binance WebSocket Tracker">
-    <h1>Binance WebSocket Tracker</h1>
+  <div class="container" role="main" aria-label="ToneTrader">
+    <h1>ToneTrader</h1>
 
     <div>
-      <input type="text" id="tradingPair" placeholder="Trading Pair, e.g., BTCUSDT">
+      <input type="text" id="ticker" placeholder="Ticker, e.g., BTCUSDT">
       <button id="connectBtn">Connect</button>
     </div>
 
@@ -100,15 +100,71 @@
       <button id="updateBtn">Update Settings</button>
     </div>
 
-    <div id="confirmationDiv"></div> <!-- New div for confirmation -->
+    <div id="confirmationDiv"></div> 
     <div id="latestTrade">Not connected</div>
 
     <nav>
       <a href="settings.html">Settings</a>
     </nav>
   </div>
+
+  <div class="container">
+    <h2>🎤 Voice Trade Execution</h2>
+    <button id="startVoiceTrade">🎤 Start Voice Trading</button>
+    <button id="stopVoiceTrade" disabled>🛑 Stop Voice Trading</button>
+
+    <p id="voiceStatus">Voice trading is OFF</p>
+    <p id="tradeExecution">Waiting for command...</p>
+  </div>
+
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="/frontend/static/script.js"></script>
+
+  <script>
+    const startVoiceTradeBtn = document.getElementById('startVoiceTrade');
+    const stopVoiceTradeBtn = document.getElementById('stopVoiceTrade');
+    const voiceStatus = document.getElementById('voiceStatus');
+    const tradeExecution = document.getElementById('tradeExecution');
+
+    function startVoiceTrading() {
+        fetch("http://localhost:3001/start-voice")
+            .then(() => {
+                voiceStatus.innerText = "🎙️ Listening for trade commands...";
+                startVoiceTradeBtn.disabled = true;
+                stopVoiceTradeBtn.disabled = false;
+            })
+            .catch(err => console.error("Voice start error:", err));
+    }
+
+    function stopVoiceTrading() {
+        fetch("http://localhost:3001/stop-voice")
+            .then(() => {
+                voiceStatus.innerText = "🛑 Voice trading stopped.";
+                startVoiceTradeBtn.disabled = false;
+                stopVoiceTradeBtn.disabled = true;
+            })
+            .catch(err => console.error("Voice stop error:", err));
+    }
+
+    startVoiceTradeBtn.addEventListener("click", startVoiceTrading);
+    stopVoiceTradeBtn.addEventListener("click", stopVoiceTrading);
+
+    // WebSocket connection to get trade confirmations
+    const socket = io("http://localhost:3000");
+    socket.on("trade-confirmation", (message) => {
+        tradeExecution.innerText = message;
+        playAudioFeedback(message);
+    });
+
+    function playAudioFeedback(message) {
+        const msg = new SpeechSynthesisUtterance(message);
+        msg.lang = "en-US";
+        msg.rate = 1.0;
+        window.speechSynthesis.speak(msg);
+    }
+  </script>
+  
 </body>
 </html>

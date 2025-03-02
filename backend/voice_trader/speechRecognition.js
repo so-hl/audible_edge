@@ -35,19 +35,40 @@ async function sendTradeRequest(action, amount) {
     }
 }
 
+const io = require("socket.io")(3000, {
+  cors: { origin: "*" }
+});
+
 // Function to process recognized speech
 function processCommand(command) {
     console.log(`🎙️ Recognized Command: "${command}"`);
 
     // Match common trading commands
     const buyMatch = command.match(/(buy|purchase) ([\d.]+) (btc|bitcoin)/i);
-    const stopLossMatch = command.match(/(set|place) stop loss at (\d+)/i);
-
+    //const stopLossMatch = command.match(/(set|place) stop loss at (\d+)/i);
+    
     if (buyMatch) {
+      const quantity = parseQuantity(buyMatch[2]);
+      if (!isNaN(quantity) && quantity > 0) {
+          console.log(`✅ Executing Buy Order: ${quantity} BTC`);
+          sendTradeRequest('buy', quantity);
+
+          // 🔥 Emit trade confirmation to frontend
+          io.emit("trade-confirmation", `✅ Trade Confirmed: Bought ${quantity} BTC`);
+      } else {
+          console.log("⚠️ Invalid quantity detected.");
+      }
+  } else {
+      console.log("⚠️ Unknown command. Try again.");
+  }
+}
+
+    /*if (buyMatch) {
         const quantity = parseQuantity(buyMatch[2]);
         if (!isNaN(quantity) && quantity > 0) {
             console.log(`✅ Executing Buy Order: ${quantity} BTC`);
             sendTradeRequest('buy', quantity);
+            io.emit("trade-confirmation", `✅ Trade Confirmed: Bought ${quantity} BTC`);
         } else {
             console.log("⚠️ Invalid quantity detected.");
         }
@@ -60,8 +81,8 @@ function processCommand(command) {
         process.exit(0);
     } else {
         console.log("⚠️ Unknown command. Try again.");
-    }
-}
+    }*/
+
 
 // Function to stream speech to Google API
 function streamSpeechToText() {

@@ -7,10 +7,13 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
 import threading
 import os
+import random
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "../../frontend/templates")
 STATIC_DIR = os.path.join(BASE_DIR, "../../frontend/static")
+
+reconnect_attempts=0
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -63,8 +66,11 @@ def on_ws_error(ws, error):
     print(f"❌ WebSocket Error: {error}")
 
 def on_ws_close(ws, close_status_code, close_msg):
-    print("❌ WebSocket closed. Reconnecting in 5 seconds...")
-    time.sleep(5)
+    global reconnect_attempts
+    delay = min(2 ** reconnect_attempts + random.uniform(0, 1), 60)  # Cap at 60 seconds
+    print(f"❌ WebSocket closed. Reconnecting in {delay:.2f} seconds...")
+    time.sleep(delay)
+    reconnect_attempts += 1
     connect_to_fastapi_ws()
 
 # Route for frontend
