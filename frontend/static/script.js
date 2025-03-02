@@ -1,105 +1,127 @@
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Script loaded successfully');
-  let audioContext;
-  try {
-      audioContext = Tone.context;
-      if (audioContext.state !== 'running') {
-          console.log('AudioContext not running, waiting for user gesture');
-      }
-  } catch (e) {
-      console.error('Tone.js initialization error:', e);
-  }
+    console.log('Script loaded successfully');
 
-  const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+    let socket = null;
+    let previousPrice = null;
+    let currentSymbol = null;
+    let lastUpdateTime = 0;  // Track last UI update time
+    let fetchInterval = 5000; // Default 5 seconds
 
-  let baseFrequency = 261.63;
-  let amplitude = 0.5;
-  let harmonics = 1;
+    // UI Elements
+    const tradingPairInput = document.getElementById('tradingPair');
+    const latestTradeDiv = document.getElementById('latestTrade');
+    const confirmationDiv = document.getElementById('confirmationDiv');
+    const priceChangeElement = document.getElementById('priceChange');
+    const connectBtn = document.getElementById('connectBtn');
 
-  const priceChangeElement = document.getElementById('priceChange');
-  const frequencySlider = document.getElementById('frequency');
-  const amplitudeSlider = document.getElementById('amplitude');
-  const harmonicsSlider = document.getElementById('harmonics');
-  const freqValue = document.getElementById('freqValue');
-  const ampValue = document.getElementById('ampValue');
-  const harmValue = document.getElementById('harmValue');
-  const statusDiv = document.getElementById('status');
-  const connectBtn = document.getElementById('connectBtn');
-  const tradingPairInput = document.getElementById('tradingPair');
-  const latestTradeDiv = document.getElementById('latestTrade');
-  const confirmationDiv = document.getElementById('confirmationDiv');
-  let tradeExecution = document.getElementById('tradeExecution');
+    // Threshold Elements
+    const thresholdSlider = document.getElementById('thresholdSlider');
+    const thresholdValue = document.getElementById('thresholdValue');
+    let threshold = parseFloat(thresholdSlider.value);
 
-  console.log('DOM elements checked:', { playC4Btn, frequencySlider, connectBtn, tradingPairInput, confirmationDiv, tradeExecution });
+    // Fetch Interval Elements
+    const intervalSlider = document.getElementById('intervalSlider');
+    const intervalValue = document.getElementById('intervalValue');
 
-  if (!tradingPairInput || !connectBtn || !latestTradeDiv || !confirmationDiv || !tradeExecution) {
-      console.error('One or more DOM elements not found! Check index.html IDs.');
-      return;
-  }
+    // Update fetch interval dynamically when the slider moves
+    intervalSlider.addEventListener('input', function () {
+        fetchInterval = parseInt(this.value) * 1000; // Convert seconds to milliseconds
+        intervalValue.innerText = this.value;
+        console.log(`Fetch interval updated: ${fetchInterval}ms`);
+    });
 
-  document.body.addEventListener('click', () => {
-      if (audioContext && audioContext.state !== 'running') {
-          audioContext.resume().then(() => {
-              console.log('AudioContext resumed');
-          });
-      }
-  }, { once: true });
+    // Update threshold when slider changes
+    thresholdSlider.addEventListener('input', function () {
+        threshold = parseFloat(this.value);
+        thresholdValue.innerText = this.value;
+    });
 
-  function playCustomNote(note) {
-      if (audioContext.state !== 'running') {
-          console.warn('AudioContext not running, skipping note');
-          return;
-      }
-      const now = Tone.now();
-      const frequencies = [];
-      for (let i = 1; i <= harmonics; i++) {
-          frequencies.push(Tone.Frequency(note).toFrequency() * i * (baseFrequency / 261.63));
-      }
-      synth.triggerAttackRelease(frequencies, '0.5', now, amplitude / Math.sqrt(harmonics));
-      console.log(`${note} played with freq ${baseFrequency}, amp ${amplitude}, harmonics ${harmonics} at`, new Date().toLocaleTimeString());
-  }
+    function connectWebSocket(symbol) {
+        if (socket && currentSymbol === symbol) {
+            console.log(`Already connected to ${symbol}, skipping reconnection.`);
+            return;  // Prevent unnecessary reconnections
+        }
 
-  if (playC4Btn) {
-      playC4Btn.addEventListener('click', () => playCustomNote('C4'));
-      playE4Btn.addEventListener('click', () => playCustomNote('E4'));
-      playG4Btn.addEventListener('click', () => playCustomNote('G4'));
-  }
+        if (socket) {
+            console.log(`Closing old connection to ${currentSymbol}`);
+            socket.close(); // Close previous WebSocket connection
+        }
 
-  if (frequencySlider) {
-      frequencySlider.addEventListener('input', (e) => {
-          baseFrequency = parseFloat(e.target.value);
-          freqValue.textContent = baseFrequency.toFixed(2);
-          console.log('Frequency changed to:', baseFrequency);
-      });
-      amplitudeSlider.addEventListener('input', (e) => {
-          amplitude = parseFloat(e.target.value);
-          ampValue.textContent = amplitude.toFixed(1);
-      });
-      harmonicsSlider.addEventListener('input', (e) => {
-          harmonics = parseInt(e.target.value);
-          harmValue.textContent = harmonics;
-          console.log('Harmonics changed to:', harmonics);
-      });
-  }
+        currentSymbol = symbol;
+        previousPrice = null;
+        lastUpdateTime = 0;
 
-  if (connectBtn) {
-      connectBtn.addEventListener('click', () => {
-          console.log('Connect button clicked');
-          const symbol = tradingPairInput.value.toLowerCase() || 'ethbtc';
-          if (!symbol) {
-              confirmationDiv.textContent = 'Please enter a trading pair!';
-              playCustomNote('C3');
-              return;
-          }
-          confirmationDiv.textContent = `Connecting to ${symbol.toUpperCase()}...`;
-          playCustomNote('C4');
-          setTimeout(() => confirmationDiv.textContent = '', 2000);
-          // Additional logic can be added here if needed, but polling is handled in index.html
-      });
-  }
+        console.log(`Connecting to WebSocket for ${symbol}`);
+        socket = new WebSocket(`ws://127.0.0.1:8000/ws/${symbol.toLowerCase()}`);
 
-  if (statusDiv && !connectBtn) {
-      statusDiv.textContent = 'Connecting to market data...';
-      // Placeholder for status updates if needed
-  }
+        socket.onopen = () => {
+            console.log(`✅ Connected to ${symbol.toUpperCase()}`);
+            confirmationDiv.textContent = `✅ Connected to ${symbol.toUpperCase()}`;
+        };
+
+        socket.onmessage = (event) => {
+            try {
+                let data = JSON.parse(event.data);
+
+                // Ensure we update UI only for the currently connected symbol
+                if (data.symbol.toLowerCase() !== currentSymbol.toLowerCase()) return;
+
+                let price = parseFloat(data.price);
+                let time = new Date(data.time * 1000).toLocaleTimeString();
+
+                let priceChange = 0;
+                let priceChangePercentage = 0;
+
+                if (previousPrice !== null) {
+                    priceChange = price - previousPrice;
+                    priceChangePercentage = ((priceChange / previousPrice) * 100).toFixed(3);
+                }
+
+                previousPrice = price;
+
+                // Throttle updates based on the dynamic fetch interval
+                const now = Date.now();
+                if (now - lastUpdateTime >= fetchInterval) {
+                    lastUpdateTime = now;  // Update last update time
+
+                    latestTradeDiv.innerText = `Latest Trade: ${price} USD at ${time}`;
+                    priceChangeElement.innerText = `Price Change: ${priceChangePercentage}%`;
+
+                    // Play sound only if price change exceeds the threshold
+                    if (Math.abs(priceChangePercentage) > threshold) {
+                        playAlert();
+                    }
+                }
+
+            } catch (error) {
+                console.error("Error processing WebSocket message:", error);
+            }
+        };
+
+        socket.onclose = () => {
+            console.log(`❌ Disconnected from ${symbol.toUpperCase()}`);
+            confirmationDiv.textContent = `❌ Disconnected from ${symbol.toUpperCase()}`;
+        };
+
+        socket.onerror = (error) => {
+            console.error("WebSocket error: ", error);
+            confirmationDiv.textContent = `⚠️ Error connecting to ${symbol.toUpperCase()}`;
+        };
+    }
+
+    function playAlert() {
+        const audio = new Audio('static/beep.wav');  // Ensure correct path
+        audio.volume = 0.5;  // Adjust volume if needed
+        audio.play().catch(error => console.log("Audio play error:", error));
+    }
+
+    connectBtn.addEventListener('click', () => {
+        const symbol = tradingPairInput.value.trim().toLowerCase() || 'btcusdt';
+        if (!symbol) {
+            confirmationDiv.textContent = 'Please enter a trading pair!';
+            return;
+        }
+        confirmationDiv.textContent = `Connecting to ${symbol.toUpperCase()}...`;
+        connectWebSocket(symbol);
+    });
 });

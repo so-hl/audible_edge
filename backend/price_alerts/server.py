@@ -1,60 +1,86 @@
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import json
-import time
-import requests
-import socketio
-from starlette.websockets import WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware  # Add this import
+import websockets
 
 app = FastAPI()
-sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
-app.mount("/ws", socketio.ASGIApp(sio, socketio_path="/ws/socket.io"))
 
-# Add CORS middleware
+# CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5500"],  # Allow the client origin
+    allow_origins=["*"],  # Allow all origins (change this in production)
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-@app.post("/update")
-async def update_trade(data: dict):
-    await sio.emit('trade', data)
-    return {"status": "received"}
+# Dictionary to track active WebSocket clients per symbol
+active_connections = {}
+
+# Dictionary to maintain Binance WebSocket tasks per symbol
+binance_tasks = {}
+
+async def binance_ws(symbol: str):
+    """Continuously fetches live trade data from Binance and distributes it to all clients."""
+    url = f"wss://stream.binance.com:9443/ws/{symbol.lower()}@trade"
+    
+    try:
+        async with websockets.connect(url) as ws:
+            print(f"🔵 Started Binance WebSocket for {symbol}")
+            
+            while symbol in active_connections and active_connections[symbol]:
+                data = await ws.recv()
+                trade = json.loads(data)
+                price = float(trade["p"])
+                trade_time = trade["T"] / 1000  # Convert milliseconds to seconds
+
+                # Send trade data to all connected clients
+                for client in active_connections[symbol]:
+                    try:
+                        await client.send_json({"symbol": symbol, "price": price, "time": trade_time})
+                    except Exception as e:
+                        print(f"⚠️ Error sending data to client: {e}")
+
+    except Exception as e:
+        print(f"❌ Binance WebSocket error for {symbol}: {e}")
+
+    finally:
+        # Cleanup if all clients disconnected
+        if symbol in binance_tasks:
+            del binance_tasks[symbol]
+        print(f"🛑 Stopped Binance WebSocket for {symbol}")
 
 @app.websocket("/ws/{symbol}")
-async def websocket_endpoint(websocket, symbol):
-    print(f"🔧 Updated Symbol: {symbol}")
+async def websocket_endpoint(websocket: WebSocket, symbol: str):
+    """Handles client WebSocket connection for a trading pair."""
     await websocket.accept()
+    
+    if symbol not in active_connections:
+        active_connections[symbol] = set()
+
+    active_connections[symbol].add(websocket)
+
+    # Start Binance WebSocket only if not already running
+    if symbol not in binance_tasks:
+        binance_tasks[symbol] = asyncio.create_task(binance_ws(symbol))
+
     try:
         while True:
-            data = await websocket.receive_text()
-            await sio.emit('trade', json.loads(data))
+            await websocket.receive_text()  # Keep connection open
     except WebSocketDisconnect:
-        print("WebSocket disconnected")
+        print(f"❌ Client disconnected from {symbol}")
 
-@app.get("/trade/{symbol}")
-async def get_trade(symbol: str):
-    binance_url = f"https://api.binance.com/api/v3/trades?symbol={symbol.upper()}&limit=1"
-    response = requests.get(binance_url)
-    if response.status_code == 200:
-        trades = response.json()
-        if trades:
-            latest_trade = trades[0]
-            return {"p": float(latest_trade["price"]), "T": latest_trade["time"] / 1000}
-    return {"p": 0, "T": time.time()}
+        active_connections[symbol].remove(websocket)
+
+        if not active_connections[symbol]:  # If no clients left, stop Binance WebSocket
+            del active_connections[symbol]
+            binance_tasks[symbol].cancel()  # Stop fetching data
+            print(f"🔌 Closed connection for {symbol}")
 
 @app.get("/")
-async def get():
-    return HTMLResponse("<h1>WebSocket Server Running</h1>")
-
-@sio.on('subscribe')
-async def handle_subscribe(sid, symbol):
-    print(f"🔧 Subscribed to {symbol}")
+async def root():
+    return {"message": "WebSocket Binance Server Running"}
 
 if __name__ == "__main__":
     import uvicorn

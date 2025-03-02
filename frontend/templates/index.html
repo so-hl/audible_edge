@@ -65,6 +65,10 @@
 
         <label for="thresholdSlider">Price Change Threshold: <span id="thresholdValue">0.001</span>%</label>
         <input type="range" id="thresholdSlider" min="0.001" max="1" step="0.001" value="0.001" class="input-box">
+
+        <label for="intervalSlider">Fetch Interval (seconds): <span id="intervalValue">10</span></label>
+        <input type="range" id="intervalSlider" min="1" max="60" step="1" value="10" class="input-box">
+        
     </div>
 
     <script>
@@ -77,6 +81,12 @@
         
         let previousPrice = null;
         let threshold = parseFloat(thresholdSlider.value);
+        let socket = null;
+
+        let intervalSlider = document.getElementById('intervalSlider');
+        let intervalValue = document.getElementById('intervalValue');
+        let fetchInterval = parseInt(intervalSlider.value) * 1000; // Convert seconds to milliseconds
+        let fetchTimer = null;
 
         // Update threshold when slider is moved
         thresholdSlider.addEventListener('input', function() {
@@ -84,54 +94,78 @@
             thresholdValue.innerText = this.value;
         });
 
-        function fetchTradeData(symbol) {
-            fetch(`http://127.0.0.1:8000/trade/${symbol}`)
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.json();
-                })
-                .then(data => {
-                    const price = parseFloat(data.p);
-                    const time = new Date(data.T * 1000).toLocaleTimeString(); // Convert to ms
-                    
-                    let priceChange = 0;
-                    let priceChangePercentage = 0;
+        // Update fetchInterval when slider is moved
+        intervalSlider.addEventListener('input', function() {
+            fetchInterval = parseInt(this.value) * 1000;
+            intervalValue.innerText = this.value;
+        });
 
-                    if (previousPrice !== null) {
-                        priceChange = price - previousPrice;
-                        priceChangePercentage = ((priceChange / previousPrice) * 100).toFixed(3);
-                    }
-                    
-                    previousPrice = price;
+        function connectWebSocket(symbol) {
+            if (socket) {
+                socket.close(); // Close existing connection before opening a new one
+            }
 
-                    latestTrade.innerText = `Latest Trade: ${price} USD at ${time}`;
-                    
-                    if (previousPrice !== null) {
-                        if (Math.abs(priceChangePercentage) > threshold) {
-                            const audio = new Audio('../static/beep.wav');
-                            audio.play();
-                        }
-                        priceChangeElement.innerText = `Price Change: ${priceChangePercentage}%`;
+            socket = new WebSocket(`ws://127.0.0.1:8000/ws/${symbol.toLowerCase()}`);
+
+            socket.onopen = () => {
+                confirmationDiv.textContent = `✅ Connected to ${symbol.toUpperCase()}`;
+            };
+
+            socket.onmessage = (event) => {
+                let data = JSON.parse(event.data);
+                let price = parseFloat(data.price);
+                let time = new Date(data.time * 1000).toLocaleTimeString();
+
+                let priceChange = 0;
+                let priceChangePercentage = 0;
+
+                if (previousPrice !== null) {
+                    priceChange = price - previousPrice;
+                    priceChangePercentage = ((priceChange / previousPrice) * 100).toFixed(3);
+                }
+
+                previousPrice = price;
+
+                latestTrade.innerText = `Latest Trade: ${price} USD at ${time}`;
+
+                if (previousPrice !== null) {
+                    if (Math.abs(priceChangePercentage) > threshold) {
+                        const audio = new Audio('../static/beep.wav');  // Ensure correct path
+                        audio.play();
                     }
-                })
-                .catch(error => console.error('Error fetching trade data:', error));
+                    priceChangeElement.innerText = `Price Change: ${priceChangePercentage}%`;
+                }
+            };
+
+            // Function to fetch data at regular intervals
+            function fetchData() {
+                // Your fetch logic here
+
+                // Schedule the next fetch
+                fetchTimer = setTimeout(fetchData, fetchInterval);
+            }
+
+            // Start fetching data
+            fetchData();
+
+            socket.onclose = () => {
+                confirmationDiv.textContent = `❌ Disconnected from ${symbol.toUpperCase()}`;
+            };
+
+            socket.onerror = (error) => {
+                console.error("WebSocket error: ", error);
+                confirmationDiv.textContent = `⚠️ Error connecting to ${symbol.toUpperCase()}`;
+            };
         }
 
         document.getElementById('connectBtn').addEventListener('click', () => {
-            const tradingPairInput = document.getElementById('tradingPair');
-            if (!tradingPairInput) {
-                console.error('tradingPairInput element not found!');
-                return;
-            }
-            const symbol = tradingPairInput.value.toLowerCase() || 'ethbtc';
+            const symbol = document.getElementById('tradingPair').value.trim().toLowerCase() || 'btcusdt';
             if (!symbol) {
                 confirmationDiv.textContent = 'Please enter a trading pair!';
                 return;
             }
             confirmationDiv.textContent = `Connecting to ${symbol.toUpperCase()}...`;
-            setTimeout(() => confirmationDiv.textContent = '', 2000);
-            fetchTradeData(symbol); // Initial fetch
-            setInterval(() => fetchTradeData(symbol), 5000); // Poll every 5 seconds
+            connectWebSocket(symbol);
         });
     </script>
     
