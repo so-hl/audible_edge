@@ -108,7 +108,7 @@
                     
                     if (previousPrice !== null) {
                         if (Math.abs(priceChangePercentage) > threshold) {
-                            const audio = new Audio('/static/beep.wav');
+                            const audio = new Audio('../static/beep.wav');
                             audio.play();
                         }
                         priceChangeElement.innerText = `Price Change: ${priceChangePercentage}%`;
