@@ -1,170 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Binance WebSocket Tracker</title>
-  <link rel="stylesheet" href="../static/styles.css">
-
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(135deg, #1e1e1e, #121212);
-      color: #ffffff;
-      text-align: center;
-      margin: 0;
-      padding: 20px;
-    }
-    .container {
-      max-width: 700px;
-      margin: auto;
-      padding: 25px;
-      background: rgba(30, 30, 30, 0.85);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
-    }
-    h1 {
-      color: #f0b90b;
-      font-size: 24px;
-      font-weight: 600;
-    }
-    input, button {
-      width: 100%;
-      padding: 12px;
-      margin: 10px 0;
-      border: none;
-      border-radius: 6px;
-      font-size: 1rem;
-      transition: all 0.3s ease-in-out;
-    }
-    input {
-      background: #2c2c2c;
-      color: white;
-      border: 1px solid #444;
-      text-align: center;
-    }
-    button {
-      background: #f0b90b;
-      color: #121212;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0px 4px 10px rgba(240, 185, 11, 0.3);
-    }
-    button:hover {
-      background: #d9a008;
-      transform: scale(1.05);
-    }
-    #latestTrade, #confirmationDiv {
-      margin-top: 20px;
-      font-size: 1.2rem;
-      background: rgba(34, 34, 34, 0.9);
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(255, 255, 255, 0.05);
-    }
-    nav {
-      margin-top: 20px;
-    }
-    nav a {
-      color: #f0b90b;
-      text-decoration: none;
-      font-weight: 500;
-      margin: 0 12px;
-      transition: all 0.3s ease-in-out;
-    }
-    nav a:hover {
-      text-decoration: underline;
-      color: #ffd700;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>ToneTrader</title>
+    <link rel="stylesheet" href="/static/styles.css"> <!-- Adjusted for live-server port 5500 -->
 </head>
 <body>
-  <div class="container" role="main" aria-label="ToneTrader">
-    <h1>ToneTrader</h1>
+    <div container role="main" aria-label="ToneTrader">
+        <h1>ToneTrader</h1>
+        <input type="text" id="tradingPair" placeholder="Trading Pair, e.g., ETHBTC">
+        <button id="connectBtn">Connect</button>
+        <div id="latestTrade"></div>
+        <div id="confirmationDiv"></div>
+        <div id="tradeExecution"></div> <!-- For trade confirmation feedback -->
+    </body>
+    <script src="/static/script.js"></script> <!-- Adjusted for live-server port 5500 -->
+    <script>
+        // REST polling to get trade data
+        let tradeExecution = document.getElementById('tradeExecution');
+        let latestTrade = document.getElementById('latestTrade');
+        let confirmationDiv = document.getElementById('confirmationDiv');
 
-    <div>
-      <input type="text" id="ticker" placeholder="Ticker, e.g., BTCUSDT">
-      <button id="connectBtn">Connect</button>
-    </div>
+        function fetchTradeData(symbol) {
+            fetch(`http://127.0.0.1:8000/trade/${symbol}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    const price = parseFloat(data.p);
+                    const time = new Date(data.T * 1000).toLocaleTimeString(); // Convert to ms
+                    latestTrade.innerText = `Latest Trade: ${price} USD at ${time}`;
+                    tradeExecution.innerText = `Trade confirmed: ${price} USD at ${time}`;
+                    playAudioFeedback(`Trade confirmed: ${price} USD at ${time}`);
+                })
+                .catch(error => console.error('Error fetching trade data:', error));
+        }
 
-    <div>
-      <label for="threshold">Threshold (%):</label>
-      <input type="number" id="threshold" placeholder="e.g., 0.02" step="0.01">
+        function playAudioFeedback(message) {
+            const msg = new SpeechSynthesisUtterance(message);
+            msg.lang = "en-US";
+            msg.rate = 1.0;
+            window.speechSynthesis.speak(msg);
+        }
 
-      <label for="timeWindow">Time Window (sec):</label>
-      <input type="number" id="timeWindow" placeholder="e.g., 30">
-
-      <button id="updateBtn">Update Settings</button>
-    </div>
-
-    <div id="confirmationDiv"></div> 
-    <div id="latestTrade">Not connected</div>
-
-    <nav>
-      <a href="settings.html">Settings</a>
-    </nav>
-  </div>
-
-  <div class="container">
-    <h2>🎤 Voice Trade Execution</h2>
-    <button id="startVoiceTrade">🎤 Start Voice Trading</button>
-    <button id="stopVoiceTrade" disabled>🛑 Stop Voice Trading</button>
-
-    <p id="voiceStatus">Voice trading is OFF</p>
-    <p id="tradeExecution">Waiting for command...</p>
-  </div>
-
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script src="/frontend/static/script.js"></script>
-
-  <script>
-    const startVoiceTradeBtn = document.getElementById('startVoiceTrade');
-    const stopVoiceTradeBtn = document.getElementById('stopVoiceTrade');
-    const voiceStatus = document.getElementById('voiceStatus');
-    const tradeExecution = document.getElementById('tradeExecution');
-
-    function startVoiceTrading() {
-        fetch("http://localhost:3001/start-voice")
-            .then(() => {
-                voiceStatus.innerText = "🎙️ Listening for trade commands...";
-                startVoiceTradeBtn.disabled = true;
-                stopVoiceTradeBtn.disabled = false;
-            })
-            .catch(err => console.error("Voice start error:", err));
-    }
-
-    function stopVoiceTrading() {
-        fetch("http://localhost:3001/stop-voice")
-            .then(() => {
-                voiceStatus.innerText = "🛑 Voice trading stopped.";
-                startVoiceTradeBtn.disabled = false;
-                stopVoiceTradeBtn.disabled = true;
-            })
-            .catch(err => console.error("Voice stop error:", err));
-    }
-
-    startVoiceTradeBtn.addEventListener("click", startVoiceTrading);
-    stopVoiceTradeBtn.addEventListener("click", stopVoiceTrading);
-
-    // WebSocket connection to get trade confirmations
-    const socket = io("http://localhost:3000");
-    socket.on("trade-confirmation", (message) => {
-        tradeExecution.innerText = message;
-        playAudioFeedback(message);
-    });
-
-    function playAudioFeedback(message) {
-        const msg = new SpeechSynthesisUtterance(message);
-        msg.lang = "en-US";
-        msg.rate = 1.0;
-        window.speechSynthesis.speak(msg);
-    }
-  </script>
-  
-</body>
+        document.getElementById('connectBtn').addEventListener('click', () => {
+            const tradingPairInput = document.getElementById('tradingPair');
+            if (!tradingPairInput) {
+                console.error('tradingPairInput element not found!');
+                return;
+            }
+            const symbol = tradingPairInput.value.toLowerCase() || 'ethbtc';
+            if (!symbol) {
+                confirmationDiv.textContent = 'Please enter a trading pair!';
+                return;
+            }
+            confirmationDiv.textContent = `Connecting to ${symbol.toUpperCase()}...`;
+            playAudioFeedback(`Connecting to ${symbol.toUpperCase()}...`);
+            setTimeout(() => confirmationDiv.textContent = '', 2000);
+            fetchTradeData(symbol); // Initial fetch
+            setInterval(() => fetchTradeData(symbol), 5000); // Poll every 5 seconds
+        });
+    </script>
 </html>
