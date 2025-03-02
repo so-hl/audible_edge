@@ -57,7 +57,7 @@
       background: #d9a008;
       transform: scale(1.05);
     }
-    #latestTrade {
+    #latestTrade, #confirmationDiv {
       margin-top: 20px;
       font-size: 1.2rem;
       background: rgba(34, 34, 34, 0.9);
@@ -100,13 +100,15 @@
       <button id="updateBtn">Update Settings</button>
     </div>
 
+    <div id="confirmationDiv"></div> <!-- New div for confirmation -->
     <div id="latestTrade">Not connected</div>
 
     <nav>
       <a href="settings.html">Settings</a>
     </nav>
   </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script src="../static/script.js"></script>
+  <script src="/frontend/static/script.js"></script>
 </body>
 </html>
