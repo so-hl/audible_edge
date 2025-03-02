@@ -16,9 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let amplitude = 0.5;
   let harmonics = 1;
 
-  const playC4Btn = document.getElementById('playC4');
-  const playE4Btn = document.getElementById('playE4');
-  const playG4Btn = document.getElementById('playG4');
+  const priceChangeElement = document.getElementById('priceChange');
   const frequencySlider = document.getElementById('frequency');
   const amplitudeSlider = document.getElementById('amplitude');
   const harmonicsSlider = document.getElementById('harmonics');
