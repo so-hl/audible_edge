@@ -1,77 +1,83 @@
 require('dotenv').config();
-console.log("🔑 API Key:", process.env.BINANCE_API_KEY);
-console.log("🔒 Secret Key:", process.env.BINANCE_SECRET_KEY ? "Loaded" : "Not Loaded");
-
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
 const cors = require('cors');
-
 const app = express();
+
 app.use(express.json());
-app.use(cors()); // Allow frontend/backend connection
+app.use(cors());
 
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
-const BASE_URL = 'https://testnet.binance.vision/api/v3/order'; // Testnet URL
+const BASE_URL = 'https://testnet.binance.vision/api/v3/order';
+const EXCHANGE_INFO_URL = 'https://api.binance.com/api/v3/exchangeInfo';
 
-// 🛠 Fix: Ensure Secret Key is Loaded
 if (!SECRET_KEY) {
     console.error("❌ ERROR: Secret Key is missing! Check your .env file.");
-    process.exit(1); // Stop execution if secret key is missing
+    process.exit(1);
 }
 
-// ✅ Correct Signature Generation
+// Fetch Binance available trading pairs
+let validTradingPairs = new Set();
+async function fetchTradingPairs() {
+    try {
+        const response = await axios.get(EXCHANGE_INFO_URL);
+        validTradingPairs = new Set(response.data.symbols.map(s => s.symbol));
+        console.log("✅ Trading pairs loaded from Binance.");
+    } catch (error) {
+        console.error("⚠️ Failed to fetch Binance trading pairs:", error.message);
+    }
+}
+fetchTradingPairs();
+
+// Function to get the correct trading pair format
+function getValidSymbol(base, quote) {
+    const direct = `${base}${quote}`.toUpperCase();
+    const inverse = `${quote}${base}`.toUpperCase();
+    if (validTradingPairs.has(direct)) return direct;
+    if (validTradingPairs.has(inverse)) return inverse;
+    return null;
+}
+
+// Function to sign API requests
 function signQuery(params) {
-    const query = new URLSearchParams(params).toString(); // Proper formatting
+    const query = new URLSearchParams(params).toString();
     return crypto.createHmac('sha256', SECRET_KEY).update(query).digest('hex');
 }
 
-// ✅ Trade API Route
+// Trade execution route
 app.post('/trade', async (req, res) => {
+    const { action, amount, baseCurrency, quoteCurrency } = req.body;
+    if (!action || !amount || !baseCurrency || !quoteCurrency) {
+        return res.status(400).json({ error: "Missing trade details." });
+    }
+
+    const symbol = getValidSymbol(baseCurrency, quoteCurrency);
+    if (!symbol) {
+        return res.status(400).json({ error: `Invalid trading pair: ${baseCurrency}/${quoteCurrency}` });
+    }
+
+    const side = action.toUpperCase();
+    const params = {
+        symbol,
+        side,
+        type: "MARKET",
+        quantity: amount,
+        timestamp: Date.now()
+    };
+    params.signature = signQuery(params);
+
     try {
-        const { action, amount } = req.body;
-        const side = action.toUpperCase();
-        const timestamp = Date.now();
-
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ success: false, error: "Invalid trade amount." });
-        }
-
-        // Construct parameters in Binance-required format
-        const params = {
-            symbol: "BTCUSDT",
-            side: side,
-            type: "MARKET",
-            quantity: parseFloat(amount).toFixed(6), // Binance requires exact decimal format
-            timestamp: timestamp,
-            recvWindow: 5000 // ✅ Ensures Binance allows up to 5s network latency
-        };
-
-        // ✅ Generate Signature
-        params.signature = signQuery(params);
-
-        console.log("🚀 Binance API Request:", params);
-
-        // ✅ Send trade request to Binance API
         const response = await axios.post(BASE_URL, null, {
-            params: params,
-            headers: { 
-                'X-MBX-APIKEY': API_KEY,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
+            headers: { 'X-MBX-APIKEY': API_KEY },
+            params
         });
-
-        console.log(`✅ Trade Executed: ${side} ${amount} BTC`);
-        console.log("📝 Binance Response:", response.data);
-
-        res.json({ success: true, trade: response.data, message: `✅ Trade Confirmed: ${side} ${amount} BTC` });
-
+        res.json({ success: true, trade: response.data });
     } catch (error) {
-        console.error("❌ Trade Execution Error:", error.response?.data || error.message);
-        res.status(500).json({ success: false, error: error.response?.data || error.message });
+        console.error("❌ Trade Error:", error.response?.data || error.message);
+        res.status(500).json({ error: error.response?.data || "Trade execution failed." });
     }
 });
 
-// ✅ Start the Server
-app.listen(3000, () => console.log('🚀 Backend running on port 3000'));
+app.listen(3000, () => console.log("🚀 Server running on port 3000"));
